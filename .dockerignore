@@ -10,7 +10,7 @@ venv/
 
 # 测试与工具
 tests/
-scripts/
+# 注意：scripts/ 不能排除 —— seed_demo.py 是容器启动命令的一部分（启动即灌演示数据）
 .pytest_cache/
 __pycache__/
 **/__pycache__/
