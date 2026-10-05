@@ -1,0 +1,57 @@
+# Git 忽略清单：这些东西不要提交到代码仓库
+# （黑客松提交前记得检查有没有把 .env 传上去）
+
+# Python 运行时产物
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 密钥配置 —— 重要！
+.env
+.env.local
+
+# 运行期产生的数据（数据库、生成的音频）
+storage/*.db
+storage/*.db-wal
+storage/*.db-shm
+storage/audio/*
+!storage/audio/.gitkeep
+
+# 测试与日志
+.pytest_cache/
+.coverage
+htmlcov/
+logs/
+*.log
+
+# IDE / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 曲库说明：
+#   storage/library/     = 已裁剪的 35 秒片段（17 首，约 9MB）→ **随仓库提交**，
+#                          这样云端部署（Render）直接 git clone 就有真歌可播。
+#                          里面的 ATTRIBUTION.txt 是 CC-BY 署名义务的载体，必须入库。
+#   storage/library_src/ = 未裁剪的整首原曲（185MB）→ 不入库，只留本地备份。
+storage/library_src/
+
+# 演示数据不随仓库走（用 scripts/seed_demo.py --build 一条命令重建）
+storage/diary_demo.db
+
+# 录屏/截图的中间产物（最终成品 docs/demo_video.mp4 要提交，中间 webm 不用）
+.tmp_shots/
+docs/_demo_raw.webm
+docs/page@*.webm
+*.log

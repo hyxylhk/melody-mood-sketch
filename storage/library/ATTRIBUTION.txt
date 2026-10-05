@@ -1,0 +1,30 @@
+本目录音乐素材来自 Kevin MacLeod (incompetech.com)，
+Licensed under Creative Commons: By Attribution 4.0 License
+http://creativecommons.org/licenses/by/4.0/
+（比赛期间仅用于赛事评审演示，不作商业用途、不对外发布上线。）
+
+曲目清单（共 17 首，**每首已裁剪为 35 秒片段**）：
+
+裁剪方式：自动分析整首歌的能量曲线，取连续 35 秒能量最高的一段
+（通常是副歌/主旋律段），避免截到安静的前奏。
+原整首文件保存在 storage/library_src/（不随仓库提交）。
+
+
+
+- joy_Batty McFaddin.mp3  |  《Batty McFaddin》  ISRC: USUAN1200003
+- excitement_Freddy's Menagerie.mp3  |  《Freddy's Menagerie》  ISRC: USUAN1100579
+- love_There is Romance.mp3  |  《There is Romance》  ISRC: USUAN1100044
+- tenderness_Gymnopedie No. 2.mp3  |  《Gymnopedie No. 2》  ISRC: USUAN1100786
+- gratitude_Angel Share.mp3  |  《Angel Share》  ISRC: USUAN1700021
+- hope_At Launch.mp3  |  《At Launch》  ISRC: USUAN1100539
+- moved_Americana.mp3  |  《Americana》  ISRC: USUAN1200092
+- relief_Beach Party.mp3  |  《Beach Party》  ISRC: USUAN1100613
+- neutral_Adeste Fideles Waltz.mp3  |  《Adeste Fideles Waltz》  ISRC: USUAN2100021
+- nostalgia_Dance of the Sugar Plum Fairies.mp3  |  《Dance of the Sugar Plum Fairies》  ISRC: USUAN1100270
+- sadness_At Rest.mp3  |  《At Rest》  ISRC: USUAN1100748
+- loneliness_Ancient Rite.mp3  |  《Ancient Rite》  ISRC: USUAN1900048
+- fatigue_Calmant.mp3  |  《Calmant》  ISRC: USUAN1100859
+- confusion_Aquarium.mp3  |  《Aquarium》  ISRC: USUAN1900026
+- stress_Constancy Part One.mp3  |  《Constancy Part One》  ISRC: USUAN1100775
+- anxiety_Darkening Developments.mp3  |  《Darkening Developments》  ISRC: USUAN1100267
+- anger_Exciting Trailer.mp3  |  《Exciting Trailer》  ISRC: USUAN1100494

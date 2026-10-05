@@ -1,0 +1,53 @@
+# =============================================================================
+# Render 一键部署配置（Blueprint）
+# =============================================================================
+# Render（render.com）的免费实例最适合这个项目：零配置、HTTPS 自带、
+# git push 自动重新部署。评委点你的公网链接就能直接体验。
+#
+# 使用方法（三步，约 5 分钟）：
+#   1. 把项目 push 到 GitHub（曲库片段 storage/library/*.mp3 记得一起提交，
+#      共约 9MB，云端才有真歌可放）
+#   2. 打开 render.com → New + → Blueprint → 选中这个仓库
+#   3. 点 Apply，等构建完成，拿到 https://xxx.onrender.com 链接
+#
+# 注意事项：
+#   - 免费实例 15 分钟无访问会"休眠"，下次访问要等约 50 秒冷启动 ——
+#     把链接发给评委之前，自己先点一次把它"叫醒"。
+#   - 免费实例没有持久磁盘：SQLite 数据会在重新部署后清空。
+#     比赛演示完全够用（演示数据用 scripts/seed_demo.py 生成即可）。
+# =============================================================================
+
+services:
+  - type: web
+    name: melody-mood-sketch
+    runtime: python
+    plan: free
+    # 只装运行期依赖（requirements-dev.txt 里的 Playwright 录屏工具云端用不到）
+    buildCommand: pip install -r requirements.txt
+    # 启动前先重建演示数据：
+    #   免费实例没有持久磁盘，每次冷启动拿到的都是"空页面 + 空轨迹"，
+    #   评委第一眼看到的效果很差。这里在启动前跑一次种子脚本，
+    #   保证任何一个链接打开的人，立刻能看到 27 篇日记 + 日历热力图 + 30 天情绪轨迹。
+    #   seed 是纯本地脚本（不联网、不调 LLM），跑完约 1 秒。
+    startCommand: python scripts/seed_demo.py --build && uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.6"
+      # 云端没有 .env（它不入库），所以这里显式指定数据库。
+      # 必须和 seed_demo.py 写的是同一个文件，否则会看到空页面。
+      - key: DATABASE_URL
+        value: "sqlite:///./storage/diary_demo.db"
+      # 云端一律关调试模式：reload 会让服务在项目文件变动时整体重启
+      - key: APP_DEBUG
+        value: "False"
+      # 优先播放曲库真歌（仓库里已带 17 首 35 秒片段）
+      - key: MUSIC_LIBRARY_FIRST
+        value: "True"
+      # 大模型 Key：在 Render 后台手动填（sync:false 表示"部署时在网页上输入"）。
+      # 不填也能跑 —— 情绪分析自动降级为本地规则引擎。
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        sync: false
+      - key: LLM_MODEL
+        sync: false

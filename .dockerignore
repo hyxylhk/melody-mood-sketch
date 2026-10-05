@@ -1,0 +1,37 @@
+# =============================================================================
+# .dockerignore —— 构建 Docker 镜像时排除这些文件
+# =============================================================================
+# 作用同 .gitignore：让 COPY 指令不把这些东西塞进镜像。
+# 镜像越小 = 推送越快 = 云端拉取越快。
+
+# 虚拟环境（镜像里用 requirements.txt 重新装）
+.venv/
+venv/
+
+# 测试与工具
+tests/
+scripts/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# 未裁剪的整首原曲（185MB，绝不能进镜像）
+storage/library_src/
+
+# 数据库与运行期产物（容器里应从空库开始）
+storage/diary.db
+storage/diary_demo.db
+storage/audio/
+storage/pieces.json
+
+# 开发产物
+docs/_demo_raw.webm
+.tmp_shots/
+*.log
+server.log
+playwright_install.log
+.env
+.git/
+.vscode/
+.idea/

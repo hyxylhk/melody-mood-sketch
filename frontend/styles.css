@@ -1,0 +1,753 @@
+/* =============================================================================
+   frontend/styles.css —— 页面样式
+   =============================================================================
+   给不懂前端的同学：
+
+   CSS 的基本套路就是「选中元素 → 设置属性」：
+       .panel { ... }        选中所有 class="panel" 的元素（注意点开头）
+       #submitBtn { ... }    选中 id="submitBtn" 的元素（注意井号开头）
+       button:hover { ... }  鼠标悬停在 button 上时生效
+
+   布局用的是 Flexbox（弹性盒子）：
+       display: flex              让子元素横向排成一排
+       justify-content: space-between   两端对齐
+       gap: 12px                  子元素之间留 12 像素的间距
+
+   颜色写法：
+       #RRGGBB              十六进制
+       rgba(255,255,255,.1) 红绿蓝 + 透明度，用于「玻璃拟态」半透明效果
+   这里大量用 rgba 半透明背景 + backdrop-filter 模糊，做出磨砂玻璃质感。
+   ============================================================================= */
+
+/* ------------------------------ 全局变量 ------------------------------ */
+/* :root 里定义的 --xxx 变量可以在整个文件里用 var(--xxx) 引用。
+   好处是改一处主题色，全站都跟着变。 */
+:root {
+    --bg: #0b0e1a;
+    --panel: rgba(255, 255, 255, 0.055);
+    --panel-border: rgba(255, 255, 255, 0.11);
+    --text: #e8ecf5;
+    --text-dim: #98a2b8;
+    --accent: #7c5cff;
+    --accent-2: #22d3ee;
+    --success: #3ddc84;
+    --danger: #ff5f6d;
+    --radius: 16px;
+    --radius-sm: 10px;
+}
+
+/* 让 width/height 包含 padding 和 border，算尺寸时不容易算错 */
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    /* 背景光球：两个径向渐变叠加，做出深蓝紫的氛围 */
+    background-image:
+        radial-gradient(1100px 600px at 12% -8%, rgba(124, 92, 255, 0.20), transparent 60%),
+        radial-gradient(900px 520px at 92% 6%, rgba(34, 211, 238, 0.16), transparent 62%);
+    padding: 0 20px 48px;
+    /* 让背景固定，滚动时不同跟着动 */
+    background-attachment: fixed;
+}
+
+/* ------------------------------ 背景光球 ------------------------------ */
+.bg-orbs { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.35;
+}
+.orb-1 { width: 380px; height: 380px; background: #6a4dff; top: -100px; left: -60px; }
+.orb-2 { width: 300px; height: 300px; background: #18b7d6; bottom: 40px; right: -80px; }
+.orb-3 { width: 260px; height: 260px; background: #ff5fa2; top: 45%; left: 55%; opacity: 0.18; }
+
+/* ------------------------------ 页头 ------------------------------ */
+.app-header {
+    position: relative;
+    z-index: 1;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 26px 4px 20px;
+    display: flex;
+    justify-content: space-between; /* 左右两端对齐 */
+    align-items: center;
+    flex-wrap: wrap;                /* 屏幕窄时自动换行 */
+    gap: 14px;
+}
+
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand-logo {
+    font-size: 34px;
+    width: 58px; height: 58px;
+    display: grid; place-items: center;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 10px 28px rgba(124, 92, 255, 0.42);
+}
+.brand-text h1 {
+    margin: 0;
+    font-size: 25px;
+    letter-spacing: 0.5px;
+    background: linear-gradient(90deg, #fff, #c8b6ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;            /* 让渐变透到文字上 */
+}
+.brand-text p { margin: 4px 0 0; color: var(--text-dim); font-size: 13.5px; }
+
+.status-box {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 16px;
+    border-radius: 999px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    font-size: 13px;
+    color: var(--text-dim);
+    backdrop-filter: blur(10px);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dot-ok { background: var(--success); box-shadow: 0 0 10px var(--success); }
+.dot-error { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
+.dot-waiting { background: #f5a524; animation: pulse 1.4s infinite; }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+.tag-tag {
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(124, 92, 255, 0.22);
+    color: #c9b8ff;
+    font-size: 11.5px;
+}
+
+/* ------------------------------ 布局 ------------------------------ */
+.layout {
+    position: relative;
+    z-index: 1;
+    max-width: 1240px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;  /* 两列等宽 */
+    gap: 18px;
+}
+
+/* 窄屏（手机）时改成单列 —— 这叫「响应式布局」 */
+@media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+}
+
+/* ------------------------------ 通用面板 ------------------------------ */
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 20px;
+    backdrop-filter: blur(14px);
+}
+
+.panel-title {
+    margin: 0 0 14px;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.title-icon { font-size: 18px; }
+
+/* ------------------------------ 快捷示例 ------------------------------ */
+.samples {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    margin-bottom: 14px;
+}
+.samples-label { font-size: 12.5px; color: var(--text-dim); }
+.chip {
+    padding: 6px 13px;
+    font-size: 12.5px;
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--panel-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.18s;
+}
+.chip:hover {
+    background: rgba(124, 92, 255, 0.28);
+    border-color: rgba(124, 92, 255, 0.6);
+    transform: translateY(-1px);
+}
+
+/* ------------------------------ 输入控件 ------------------------------ */
+.text-input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 14.5px;
+    font-family: inherit;           /* 继承 body 的字体，不然会变成默认宋体 */
+    color: var(--text);
+    background: rgba(0, 0, 0, 0.24);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+    outline: none;
+    transition: border-color 0.18s, box-shadow 0.18s;
+}
+.text-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.16);
+}
+.text-input::placeholder { color: #6b7591; }
+
+.diary-input {
+    margin-top: 12px;
+    resize: vertical;               /* 只允许上下拖动改高度 */
+    line-height: 1.75;
+    min-height: 190px;
+}
+
+.editor-footer {
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.char-count { font-size: 12.5px; color: var(--text-dim); }
+.editor-actions { display: flex; align-items: center; gap: 12px; }
+
+.checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-dim); cursor: pointer; }
+.checkbox input { accent-color: var(--accent); cursor: pointer; }
+
+/* ------------------------------ 按钮 ------------------------------ */
+.btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-family: inherit;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.16s, box-shadow 0.16s, opacity 0.16s;
+}
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.btn-primary {
+    color: #fff;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    box-shadow: 0 8px 22px rgba(124, 92, 255, 0.36);
+}
+.btn-primary:hover:not(:disabled) { transform: translateY(-2px); }
+.btn-ghost {
+    color: var(--text);
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--panel-border);
+    padding: 8px 16px;
+    font-size: 13px;
+}
+.btn-ghost:hover { background: rgba(255, 255, 255, 0.16); }
+.btn-mini {
+    padding: 5px 13px;
+    font-size: 12.5px;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--panel-border);
+}
+
+/* ------------------------------ 空状态 ------------------------------ */
+.empty-state { text-align: center; padding: 56px 12px; }
+.empty-icon { font-size: 54px; margin-bottom: 12px; opacity: 0.85; }
+.empty-title { margin: 0 0 8px; font-size: 16px; }
+.empty-hint { margin: 0; font-size: 13.5px; color: var(--text-dim); line-height: 1.8; }
+
+/* ------------------------------ 情绪卡片 ------------------------------ */
+.emotion-card {
+    padding: 18px;
+    border-radius: var(--radius-sm);
+    /* 背景色和左边框的颜色由 JS 根据情绪动态注入（--currentColor） */
+    background: linear-gradient(135deg, var(--emotion-color, rgba(124,92,255,.18)), rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--panel-border);
+    border-left: 4px solid var(--emotion-color, var(--accent));
+    transition: background 0.4s, border-color 0.4s;
+}
+
+.emotion-head { display: flex; align-items: center; gap: 14px; }
+.emotion-icon {
+    font-size: 40px;
+    width: 62px; height: 62px;
+    display: grid; place-items: center;
+    border-radius: 18px;
+    background: rgba(0, 0, 0, 0.28);
+    flex-shrink: 0;                 /* 不允许被压缩变形 */
+}
+.emotion-title { flex: 1; min-width: 0; }
+.emotion-title h3 { margin: 0; font-size: 22px; }
+.emotion-desc { margin: 3px 0 0; font-size: 13px; color: var(--text-dim); }
+
+.badge {
+    padding: 4px 11px;
+    font-size: 11.5px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--text-dim);
+    white-space: nowrap;
+}
+/* 来源是 llm 时给个高亮，方便答辩时展示"真的调了大模型" */
+.badge.badge-llm { background: rgba(61, 220, 132, 0.18); color: #7ff0ac; }
+.badge.badge-local { background: rgba(245, 165, 36, 0.16); color: #ffd48a; }
+
+.tag-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+.emotion-tag {
+    padding: 4px 12px;
+    font-size: 12.5px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--panel-border);
+}
+
+/* ------------------------------ 维度指标条 ------------------------------ */
+.metrics {
+    margin-top: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+}
+.metric-head {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: var(--text-dim); margin-bottom: 6px;
+}
+.metric-bar {
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+.metric-fill {
+    height: 100%;
+    width: 0;                        /* JS 会动态改 width */
+    border-radius: 999px;
+    transition: width 0.7s cubic-bezier(.4, 0, .2, 1);
+}
+.metric-fill.valence    { background: linear-gradient(90deg, #ff6b6b, #3ddc84); }
+.metric-fill.arousal    { background: linear-gradient(90deg, #22d3ee, #ffb020); }
+.metric-fill.intensity  { background: linear-gradient(90deg, #7c5cff, #ff5fa2); }
+.metric-note { display: block; margin-top: 5px; font-size: 10.5px; color: #6b7591; }
+
+.emotion-summary {
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    line-height: 1.75;
+    background: rgba(0, 0, 0, 0.22);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--accent);
+}
+
+.prompt-box { margin-top: 12px; font-size: 12.5px; color: var(--text-dim); }
+.prompt-box summary { cursor: pointer; user-select: none; }
+.prompt-box code {
+    display: block;
+    margin-top: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.7;
+    background: rgba(0, 0, 0, 0.32);
+    border-radius: 8px;
+    word-break: break-all;
+}
+
+/* ------------------------------ 音乐卡片 ------------------------------ */
+.music-card {
+    margin-top: 16px;
+    padding: 18px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--panel-border);
+}
+.music-title { margin: 0 0 14px; font-size: 15px; }
+
+.progress-wrap { margin-bottom: 14px; }
+.progress-bar {
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.5s ease;
+    animation: shimmer 1.5s infinite;
+}
+@keyframes shimmer {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+.progress-text { margin: 8px 0 0; font-size: 12.5px; color: var(--text-dim); }
+
+.audio-player {
+    width: 100%;
+    height: 42px;
+    border-radius: 10px;
+    /* Safari 下需要显式设置背景，否则原生控件可能不可见 */
+    background: rgba(0, 0, 0, 0.28);
+}
+
+.error-box {
+    padding: 14px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 95, 109, 0.12);
+    border: 1px solid rgba(255, 95, 109, 0.35);
+    font-size: 13px;
+}
+.error-box p { margin: 0 0 10px; color: #ffb3b8; word-break: break-all; }
+
+.music-footer {
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+}
+.music-meta { font-size: 12px; color: var(--text-dim); }
+
+/* ------------------------------ 历史列表 ------------------------------ */
+.history-panel {
+    position: relative;
+    z-index: 1;
+    max-width: 1240px;
+    margin: 18px auto 0;
+}
+.history-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.history-head .panel-title { margin: 0; }
+.history-stats { display: flex; align-items: center; gap: 14px; font-size: 12.5px; color: var(--text-dim); }
+.history-stats b { color: var(--text); font-size: 14px; }
+
+.history-list { display: grid; gap: 10px; }
+.history-item {
+    padding: 13px 15px;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.035);
+    border: 1px solid var(--panel-border);
+    border-left: 3px solid var(--item-color, var(--accent));
+    cursor: pointer;
+    transition: transform 0.16s, background 0.16s;
+}
+.history-item:hover { background: rgba(255, 255, 255, 0.075); transform: translateX(3px); }
+.history-item-top {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    margin-bottom: 6px;
+}
+.history-item-left { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.history-item-icon { font-size: 19px; }
+.history-item-label { font-size: 13.5px; font-weight: 600; }
+.history-item-date { font-size: 11.5px; color: #6b7591; white-space: nowrap; }
+.history-item-excerpt {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+    /* 超过两行就显示省略号 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.history-item-foot { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 11.5px; color: #6b7591; }
+.play-badge { color: #7ff0ac; }
+
+/* ------------------- 时间线卡片：操作列 / 置顶 / 粉碎动效 -------------------
+   布局上把卡片改成了「左侧竖排操作按钮 + 右侧正文」两栏：
+   ┌──┬─────────────────────────────┐
+   │📌│ 🌙 孤独            10-02 … │
+   │🗑│ 又是一个人吃饭……             │
+   └──┴─────────────────────────────┘
+   操作列默认半透明，鼠标悬停到卡片上才完全显形（不干扰日常浏览）。 */
+.history-item { display: flex; gap: 10px; position: relative; }
+.history-item-body { flex: 1; min-width: 0; }
+
+.card-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    opacity: 0;                       /* 默认隐藏，悬停时浮现 */
+    transition: opacity 0.18s;
+}
+.history-item:hover .card-actions { opacity: 1; }
+.history-item.is-pinned .card-actions { opacity: 0.85; }   /* 置顶卡片常显，方便再次点击 */
+
+.card-action-btn {
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    line-height: 1;
+    border-radius: 7px;
+    border: 1px solid var(--panel-border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: transform 0.14s, background 0.14s, color 0.14s;
+    padding: 0;
+}
+.card-action-btn:hover { transform: scale(1.14); background: rgba(255, 255, 255, 0.12); color: var(--text); }
+.card-action-btn.del-btn:hover { background: rgba(255, 92, 92, 0.18); border-color: rgba(255, 92, 92, 0.5); color: #ff8a8a; }
+.card-action-btn:active { transform: scale(0.92); }
+
+/* 置顶卡片的视觉强调：金色描边 + 左上角小图钉 */
+.history-item.is-pinned {
+    border-color: rgba(255, 200, 90, 0.45);
+    background: rgba(255, 200, 90, 0.06);
+}
+.pin-badge {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    font-size: 10.5px;
+    color: #ffd27a;
+    background: rgba(255, 200, 90, 0.12);
+    border: 1px solid rgba(255, 200, 90, 0.35);
+    padding: 1px 7px;
+    border-radius: 999px;
+    pointer-events: none;             /* 纯展示，别挡住点击 */
+}
+
+/* 「粉碎」删除动效：
+   JS 会把卡片在屏幕上原本的位置克隆成 4x4=16 块碎片（.shatter-fragment），
+   每块用 clip-path 裁出自己那一格，再用 Web Animations API 向随机方向
+   旋转飞散 + 渐隐 —— 全程 GPU 合成，不引起页面重排，非常流畅。 */
+.shatter-holder {
+    position: fixed;
+    inset: 0;                         /* 覆盖整个视口，方便按视口坐标摆放碎片 */
+    z-index: 999;
+    pointer-events: none;             /* 纯动画层，绝不拦截用户点击 */
+}
+.shatter-fragment {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--panel-border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    will-change: transform, opacity;  /* 提示浏览器把这层交给 GPU */
+}
+
+/* ------------------------------ 页脚 & 提示 ------------------------------ */
+.app-footer {
+    position: relative;
+    z-index: 1;
+    max-width: 1240px;
+    margin: 26px auto 0;
+    text-align: center;
+    font-size: 12.5px;
+    color: #5f6883;
+}
+.app-footer a { color: #8b91b8; text-decoration: none; }
+.app-footer a:hover { color: var(--accent-2); }
+.dot-sep { margin: 0 8px; }
+
+.toast {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 99;
+    padding: 12px 20px;
+    font-size: 13.5px;
+    border-radius: 12px;
+    background: rgba(20, 24, 40, 0.95);
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+    animation: toast-in 0.3s ease;
+}
+.toast.toast-error { border-color: rgba(255, 95, 109, 0.5); color: #ffb3b8; }
+.toast.toast-ok { border-color: rgba(61, 220, 132, 0.45); color: #9df3be; }
+@keyframes toast-in {
+    from { transform: translateY(14px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+}
+
+/* =============================================================================
+   情绪轨迹：日历热力图 + 效价折线图
+   -----------------------------------------------------------------------------
+   全部手写，没有用任何图表库（ECharts / Chart.js 都不需要）。
+   日历用 CSS Grid 排格子，折线图用 SVG 画 —— 两者都能自适应宽度且体积小。
+   ============================================================================= */
+
+.trajectory-summary { display: flex; gap: 14px; font-size: 12.5px; color: var(--text-dim); }
+.trajectory-summary b { color: var(--text); font-size: 14px; }
+
+/* 日历：7 列 = 一周。gap 用 6px 让格子之间有呼吸感 */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.calendar-cell {
+    position: relative;
+    aspect-ratio: 1 / 1;          /* 正方形格子，不用手写高度 */
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* 有记录的日子：用当天主导情绪的主题色填充 */
+.calendar-cell.has-entry {
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.07);
+}
+.calendar-cell.has-entry:hover {
+    transform: translateY(-2px) scale(1.08);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    z-index: 2;
+}
+
+/* 当天写了多篇：右下角叠一个角标，数字表示篇数 */
+.calendar-cell .cell-count {
+    position: absolute;
+    right: 3px;
+    bottom: 1px;
+    font-size: 9.5px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+/* 没有记录的占位格子（也要渲染出来，否则日历会错位） */
+.calendar-cell.is-empty { background: rgba(255, 255, 255, 0.028); border-style: dashed; }
+
+/* 图例：列出这段时间出现过的情绪 */
+.calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-top: 12px;
+    font-size: 11.5px;
+    color: var(--text-dim);
+}
+.calendar-legend .legend-item { display: flex; align-items: center; gap: 5px; }
+.calendar-legend .legend-dot {
+    width: 9px; height: 9px; border-radius: 3px; display: inline-block;
+}
+
+/* 折线图区块 */
+.trend-block { margin-top: 18px; }
+.trend-title { font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; }
+
+.trend-chart {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius-sm);
+}
+
+/* 折线下方区域的填充（渐变到透明），让"起伏"更直观 */
+.trend-chart .trend-area { fill: url(#trendGradient); }
+
+.trend-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+}
+.trend-axis-mid { opacity: 0.75; }
+
+/* 数据不足时的提示（少于 2 天记录画不出折线） */
+.trend-empty {
+    padding: 22px 0;
+    text-align: center;
+    font-size: 12.5px;
+    color: var(--text-dim);
+}
+
+/* JS 通过增删这个类来控制元素的显示/隐藏 */
+.hidden { display: none !important; }
+
+
+/* =============================================================================
+   手机端适配（≤ 640px）
+   -----------------------------------------------------------------------------
+   本项目定位是 **H5 网页工具**，评委很可能直接用手机点开链接，
+   所以这里不是"顺便做做"，而是必须保证手机上能完整走完流程。
+
+   三个关键点：
+     1. 触屏**没有 hover** —— 桌面端"鼠标悬停才浮现"的按钮在手机上永远点不到，
+        必须改成常显。这是最容易漏的一条。
+     2. 手指比鼠标粗 —— 可点击区域至少 32~44px，否则容易点错。
+     3. 播放器固定底部 —— 滚到时间线底部时也能控制播放，不用往回滑。
+   ============================================================================= */
+@media (max-width: 640px) {
+    body { padding: 0 12px 40px; }
+
+    .app-header { padding: 16px 0 12px; }
+    .brand { gap: 10px; }
+    .brand-text h1 { font-size: 18px; }
+    .brand-text p { font-size: 12px; }
+
+    .panel { padding: 14px; border-radius: 13px; }
+    .panel-title { font-size: 15px; margin-bottom: 11px; }
+
+    .layout { grid-template-columns: 1fr; gap: 14px; }
+
+    /* 触屏没有 hover：置顶/删除按钮必须常显，否则手机上根本点不到 */
+    .card-actions { opacity: 1 !important; gap: 8px; }
+    .card-action-btn {
+        width: 32px;
+        height: 32px;
+        font-size: 15px;
+        background: rgba(255, 255, 255, 0.09);
+    }
+
+    /* 触控友好：输入框和主按钮加大，避免误触 */
+    /* 注意：输入框的 id 是 diaryContent（不是 diaryInput），别写错选择器 */
+    #diaryContent { min-height: 132px; font-size: 15px; }
+    .btn { padding: 11px 16px; font-size: 14px; }
+    #submitBtn { width: 100%; }
+
+    /* 日历格子在小屏上缩小间距，否则 7 列会挤爆 */
+    .calendar-grid { gap: 4px; }
+    .calendar-cell { border-radius: 6px; }
+    .calendar-legend { gap: 6px 10px; font-size: 11px; }
+
+    /* 播放器固定在底部：滚动浏览历史时也能随时暂停/播放 */
+    .audio-player {
+        position: sticky;
+        bottom: 10px;
+        width: 100%;
+        z-index: 20;
+        background: rgba(20, 24, 40, 0.92);
+        border-radius: 10px;
+    }
+
+    .history-item { padding: 12px !important; }
+    .history-item-excerpt { font-size: 12.5px; }
+
+    /* 页脚在桌面端是块级居中；手机上改成 flex 才能优雅换行
+       （原样式没有 display:flex，这里必须补上，否则 flex-wrap 不生效） */
+    .app-footer {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 8px;
+        font-size: 11px;
+        text-align: center;
+        justify-content: center;
+    }
+    /* 手机上隐藏分隔符，页脚本来就换行了，再显示 · 会显得杂 */
+    .app-footer .dot-sep { display: none; }
+}

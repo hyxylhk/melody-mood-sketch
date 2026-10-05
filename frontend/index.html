@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<!--
+============================================================================
+frontend/index.html —— 前端页面骨架
+============================================================================
+给不懂前端的同学：
+
+    HTML = 页面的「骨架/内容结构」，类似于写作文列大纲：
+        <header>  页头
+        <main>    正文主体
+        <section> 一块内容区域
+        <div>     通用的盒子（用来分组和布局）
+
+    CSS  = 页面的「外观/装修」（颜色、间距、圆角、动画），在 styles.css 里
+    JS   = 页面的「行为」（点击按钮后干什么、怎么调接口），在 app.js 里
+
+    三个文件的关系：
+        HTML 通过 id 给元素起名字 → JS 用 document.getElementById 找到它操作它
+        CSS  通过 class 给元素穿衣服 → HTML 里用 class="xxx" 指定穿哪套
+
+    本文件里大量出现的 id="xxx" 就是给 JS 用的"抓手"。
+============================================================================
+-->
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- viewport：让页面在手机上按真实宽度显示，不然会被缩放得很小 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>旋律情绪速写 · AI 音乐情绪日记本</title>
+
+    <!-- 注意这里用的是相对路径：
+         因为 index.html 和 styles.css 在同一个目录，
+         无论是被后端托管访问，还是直接双击文件打开(file://)，都能正确加载。 -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- 背景装饰光球：纯 CSS 画的，没有实际功能，纯粹为了好看 -->
+    <div class="bg-orbs">
+        <span class="orb orb-1"></span>
+        <span class="orb orb-2"></span>
+        <span class="orb orb-3"></span>
+    </div>
+
+    <!-- ============================== 页头 ============================== -->
+    <header class="app-header">
+        <div class="brand">
+            <span class="brand-logo">🎧</span>
+            <div class="brand-text">
+                <h1>旋律情绪速写</h1>
+                <p>写下此刻，让音乐替你说话</p>
+            </div>
+        </div>
+
+        <!-- 右上角的状态灯：页面加载时会调用 /api/health 看后端活着没，
+             并把"大模型有没有配好""现在走哪条音乐通道"显示出来。 -->
+        <div class="status-box">
+            <span id="healthDot" class="dot dot-waiting"></span>
+            <span id="healthText">正在连接后端…</span>
+            <span id="providerTag" class="tag-tag hidden"></span>
+        </div>
+    </header>
+
+    <!-- ============================== 主体 ============================== -->
+    <main class="layout">
+
+        <!-- ---------------- 左栏：日记编辑器 ---------------- -->
+        <section class="panel editor-panel">
+            <h2 class="panel-title">
+                <span class="title-icon">✍️</span> 写下今天
+            </h2>
+
+            <!-- 快捷示例：答辩现场点一下就能填满内容，不用手打 -->
+            <div class="samples">
+                <span class="samples-label">试试这些：</span>
+                <button class="chip" data-text="今天项目终于上线了！熬了三个通宵，看到用户第一句夸奖的时候，鼻子有点酸，但真的超级开心，一切都值了。">😄 开心</button>
+                <button class="chip" data-text="又是一个人吃饭、一个人走路、一个人回到空荡荡的房间。窗外的灯一盏盏亮起来，没有一盏是为我亮的。">🌙 孤独</button>
+                <button class="chip" data-text="距离deadline只剩两天，还有三个模块没做完，leader又在催进度，感觉快要喘不过气来了。">😰 焦虑</button>
+                <button class="chip" data-text="下班路上看到晚霞把整条街染成了橘红色，突然想起小时候放学回家也是这个颜色，心里暖暖的。">🌸 温柔</button>
+            </div>
+
+            <input
+                id="diaryTitle"
+                type="text"
+                class="text-input"
+                placeholder="标题（可以不写）"
+                maxlength="60">
+
+            <!-- textarea = 多行文本输入框 -->
+            <textarea
+                id="diaryContent"
+                class="text-input diary-input"
+                rows="9"
+                maxlength="5000"
+                placeholder="今天发生了什么？你感觉怎么样？随便写，哪怕只有一句话……
+比如：搞定了困扰一周的 bug，走在回宿舍的路上，风很轻。"></textarea>
+
+            <div class="editor-footer">
+                <span id="charCount" class="char-count">0 / 5000</span>
+                <div class="editor-actions">
+                    <label class="checkbox">
+                        <input id="autoMusic" type="checkbox" checked>
+                        <span>自动生成配乐</span>
+                    </label>
+                    <button id="submitBtn" class="btn btn-primary">
+                        <span class="btn-text">生成我的音乐日记</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ---------------- 右栏：情绪 + 音乐结果 ---------------- -->
+        <section class="panel result-panel">
+
+            <!-- 空状态：还没提交任何日记时显示 -->
+            <div id="resultEmpty" class="empty-state">
+                <div class="empty-icon">🎼</div>
+                <p class="empty-title">还没有日记</p>
+                <p class="empty-hint">在左边写点什么，AI 会读出你的情绪，并为它写一段独一无二的背景音乐。</p>
+            </div>
+
+            <!-- 有结果后显示这张卡片 -->
+            <div id="resultCard" class="hidden">
+
+                <!-- ===== 情绪卡片 ===== -->
+                <div id="emotionCard" class="emotion-card">
+                    <div class="emotion-head">
+                        <div id="emotionIcon" class="emotion-icon">😐</div>
+                        <div class="emotion-title">
+                            <h3 id="emotionLabel">待分析</h3>
+                            <p id="emotionDesc" class="emotion-desc">—</p>
+                        </div>
+                        <!-- 来源徽章：告诉评审是 LLM 还是本地算法分析的 -->
+                        <span id="sourceBadge" class="badge">—</span>
+                    </div>
+
+                    <!-- 次要情绪标签胶囊 -->
+                    <div id="emotionTags" class="tag-list"></div>
+
+                    <!-- 三个心理学维度条：效价/唤醒度/强度 -->
+                    <div class="metrics">
+                        <div class="metric">
+                            <div class="metric-head">
+                                <span>情绪效价</span>
+                                <span id="valenceText">0.00</span>
+                            </div>
+                            <div class="metric-bar"><div id="valenceBar" class="metric-fill valence"></div></div>
+                            <span class="metric-note">负向 ←→ 正向</span>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-head">
+                                <span>唤醒度</span>
+                                <span id="arousalText">0.00</span>
+                            </div>
+                            <div class="metric-bar"><div id="arousalBar" class="metric-fill arousal"></div></div>
+                            <span class="metric-note">平静 ←→ 激动</span>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-head">
+                                <span>强度</span>
+                                <span id="intensityText">0.00</span>
+                            </div>
+                            <div class="metric-bar"><div id="intensityBar" class="metric-fill intensity"></div></div>
+                            <span class="metric-note">微弱 ←→ 强烈</span>
+                        </div>
+                    </div>
+
+                    <p id="emotionSummary" class="emotion-summary">—</p>
+                    <details class="prompt-box">
+                        <summary>看看 AI 写的音乐提示词</summary>
+                        <code id="musicPrompt">—</code>
+                    </details>
+                </div>
+
+                <!-- ===== 音乐播放器卡片 ===== -->
+                <div class="music-card">
+                    <h3 class="music-title">🎵 专属配乐</h3>
+
+                    <!-- 生成中的进度条 -->
+                    <div id="musicProgress" class="progress-wrap hidden">
+                        <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+                        <p id="progressText" class="progress-text">正在为你作曲…</p>
+                    </div>
+
+                    <!-- HTML5 原生播放器：controls 属性 = 显示播放/进度/音量控件 -->
+                    <audio id="audioPlayer" class="audio-player hidden" controls preload="metadata"></audio>
+
+                    <!-- 生成失败时的提示 + 重试按钮 -->
+                    <div id="musicError" class="error-box hidden">
+                        <p id="musicErrorText"></p>
+                        <button id="retryBtn" class="btn btn-ghost">重新生成</button>
+                    </div>
+
+                    <div class="music-footer">
+                        <span id="musicMeta" class="music-meta">—</span>
+                        <button id="regenBtn" class="btn btn-ghost hidden">换一首</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ============================== 情绪轨迹 ==============================
+         作品介绍里承诺的是"留存自己的情绪变化轨迹"——
+         只有一条时间线列表是称不上"轨迹"的，所以这里给两种可视化：
+           1) 日历热力图：哪天写了、那天什么情绪（一眼看出情绪分布）
+           2) 效价折线图：心情高低起伏（一眼看出变化趋势）
+         两者都是纯 DOM + SVG 手绘，不引入任何图表库。
+    -->
+    <section class="panel trajectory-panel">
+        <div class="history-head">
+            <h2 class="panel-title"><span class="title-icon">📈</span> 情绪轨迹</h2>
+            <div class="trajectory-summary">
+                <span>连续记录 <b id="trajStreak">0</b> 天</span>
+                <span>活跃 <b id="trajActive">0</b> 天</span>
+                <span>共 <b id="trajTotal">0</b> 篇</span>
+            </div>
+        </div>
+
+        <!-- 日历热力图：JS 按天生成格子，鼠标悬停看当天详情 -->
+        <div id="calendarGrid" class="calendar-grid" aria-label="情绪日历热力图"></div>
+        <div id="calendarLegend" class="calendar-legend"></div>
+
+        <!-- 效价折线图：SVG 手绘，横轴=日期，纵轴=效价(-1 低落 ~ +1 愉快) -->
+        <div class="trend-block">
+            <div class="trend-title">心情起伏（效价趋势）</div>
+            <svg id="trendChart" class="trend-chart" viewBox="0 0 640 180"
+                 preserveAspectRatio="xMidYMid meet" role="img"
+                 aria-label="情绪效价趋势折线图"></svg>
+            <div class="trend-axis">
+                <span id="trendStart">—</span>
+                <span class="trend-axis-mid">低 ← 效价 → 高</span>
+                <span id="trendEnd">—</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================== 历史记录 ============================== -->
+    <section class="panel history-panel">
+        <div class="history-head">
+            <h2 class="panel-title"><span class="title-icon">📖</span> 日记时间线</h2>
+            <div class="history-stats">
+                <span>日记 <b id="statDiaries">0</b></span>
+                <span>配乐 <b id="statTracks">0</b></span>
+                <button id="refreshBtn" class="btn btn-mini">刷新</button>
+            </div>
+        </div>
+        <div id="historyList" class="history-list">
+            <p class="empty-hint">加载中…</p>
+        </div>
+    </section>
+
+    <footer class="app-footer">
+        <span>腾讯音乐黑客松 · 创新音乐产品赛道</span>
+        <span class="dot-sep">·</span>
+        <span>FastAPI + SQLite + 原生前端</span>
+        <span class="dot-sep">·</span>
+        <a href="/docs" target="_blank" rel="noopener">API 文档</a>
+        <!-- CC-BY 4.0 署名义务：曲库使用 Kevin MacLeod 的音乐，必须在页面展示来源 -->
+        <span class="dot-sep">·</span>
+        <span title="本页曲库音乐素材来自 Kevin MacLeod (incompetech.com)，Licensed under Creative Commons: By Attribution 4.0 License，比赛期间仅用于赛事评审演示">曲库音乐: Kevin MacLeod (incompetech.com) · CC BY 4.0</span>
+    </footer>
+
+    <!-- 轻提示气泡：操作成功/失败时右下角弹出 -->
+    <div id="toast" class="toast hidden"></div>
+
+    <!-- 注意 script 放在 body 结尾：确保 JS 运行时上面的元素都已经存在 -->
+    <script src="app.js"></script>
+</body>
+</html>
