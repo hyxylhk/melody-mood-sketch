@@ -1,0 +1,68 @@
+# =============================================================================
+# Docker 冒烟测试 —— 在 GitHub 的 Linux 容器里完整复现云端部署
+# =============================================================================
+# 目的：本地没有 Docker，Railway 日志看不到容器崩溃原因。
+# 这条流水线在 ubuntu 容器里：构建镜像 → 按云端同款命令启动 → curl 健康检查
+# → 把容器日志打印出来。哪里崩了，这里看得一清二楚。
+#
+# 手动触发：仓库 Actions 页 → docker-smoke → Run workflow
+# =============================================================================
+
+name: docker-smoke
+
+on:
+  workflow_dispatch:          # 手动触发
+  push:
+    paths:
+      - ".github/workflows/docker-smoke.yml"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "requirements.txt"
+      - "backend/**"
+      - "frontend/**"
+      - "scripts/**"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 构建镜像
+        run: docker build -t melody-test . 2>&1 | tail -20
+
+      - name: 按云端方式启动容器
+        run: |
+          docker run -d --name melody -p 8000:8000 -e PORT=8000 melody-test
+          for i in $(seq 1 15); do
+            sleep 4
+            if curl -sf http://localhost:8000/api/health > /dev/null; then
+              echo "== 第 ${i} 轮探测成功 =="
+              break
+            fi
+            echo "== 第 ${i} 轮探测失败，容器状态: $(docker inspect -f '{{.State.Status}} (exitcode {{.State.ExitCode}})' melody) =="
+          done
+
+      - name: 健康检查与数据验证
+        run: |
+          echo "===== /api/health ====="
+          curl -s http://localhost:8000/api/health || echo "HEALTH FAILED"
+          echo
+          echo "===== 日记数量 ====="
+          curl -s http://localhost:8000/api/diary/stats || echo "STATS FAILED"
+          echo
+          echo "===== 容器内进程 ====="
+          docker exec melody sh -c "ps aux | head -10" || true
+
+      - name: 打印容器日志（崩溃原因在这里）
+        if: always()
+        run: docker logs melody 2>&1 | tail -60
+
+      - name: 上传完整日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-logs
+          path: container_logs.txt
+          continue-on-error: true
