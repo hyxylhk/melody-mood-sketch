@@ -55,3 +55,6 @@ storage/diary_demo.db
 docs/_demo_raw.webm
 docs/page@*.webm
 *.log
+
+# 云平台部署包（临时产物，不入库）
+cloudbase_deploy.zip

@@ -579,62 +579,99 @@ async function togglePin(item) {
 }
 
 /* ---------------------------------------------------------------------------
-   删除 + 「粉碎」动效
-   流程：卡片瞬间隐身 → 在原位生成 16 块碎片 → 各自旋转飞散渐隐 →
-        后台调 DELETE 接口 → 刷新列表
-   视觉与数据互不等待：动画在前台跑，删除请求同时发出去。
+   删除 + 「抖动 → 粉碎成粒子坠落」动效
+
+   两个阶段：
+     ① 抖动（约 0.5 秒）：卡片本体左右高频摆动，描边转红，像"被抓住摇醒"
+     ② 粉碎（约 1.0 秒）：本体隐身，原位生成 5x5=25 块不规则碎片，
+        先向外上方爆开（抛物线上升段），再被"重力"加速拉落并渐隐消失
+
+   数据请求和动画并行：DELETE 请求在动画开跑的同一瞬间发出，互不等待。
 --------------------------------------------------------------------------- */
 async function shatterAndDelete(item, cardEl) {
     // dataset.deleting 是个"防重入锁"：连点删除按钮时只触发一次
     if (cardEl.dataset.deleting) return;
     cardEl.dataset.deleting = '1';
 
-    playShatter(cardEl);                              // 前台：先炸再说
-    const res = await apiDelete('/api/diary/' + item.id);   // 后台：真的删数据
+    // 这里故意不 await：请求立刻发出去，动画同时开跑，两条线并行
+    const resPromise = apiDelete('/api/diary/' + item.id);
 
-    // 碎片飞完大概 0.8 秒，等它落定再刷新界面
-    setTimeout(() => {
-        if (!res.ok) {
-            toast('删除失败：' + res.error, 'error', 5000);
-            loadHistory();                            // 失败就恢复原样
-            return;
-        }
-        // 如果删的正好是当前正在查看的日记，把右侧面板清回空状态
-        if (state.currentDiaryId === item.id) {
-            state.currentDiaryId = null;
-            resetMusicUI();
-            $('resultCard').classList.add('hidden');
-            $('resultEmpty').classList.remove('hidden');
-        }
-        loadHistory();
-        loadStats();
-        loadTrajectory();
-        toast('日记已粉碎 🗑');
-    }, 720);
+    await playShatter(cardEl);          // 等整套动画演完（约 1.5 秒）
+    const res = await resPromise;       // 这时候结果通常早就回来了
+
+    if (!res.ok) {
+        toast('删除失败：' + res.error, 'error', 5000);
+        loadHistory();                  // 失败就恢复原样
+        return;
+    }
+    // 如果删的正好是当前正在查看的日记，把右侧面板清回空状态
+    if (state.currentDiaryId === item.id) {
+        state.currentDiaryId = null;
+        resetMusicUI();
+        $('resultCard').classList.add('hidden');
+        $('resultEmpty').classList.remove('hidden');
+    }
+    loadHistory();
+    loadStats();
+    loadTrajectory();
+    toast('日记已粉碎 🗑');
+}
+
+/** 完整动效：先抖动，再粉碎 */
+async function playShatter(cardEl) {
+    await shakeCard(cardEl);
+    await burstIntoParticles(cardEl);
 }
 
 /**
- * 粉碎动画本体。
+ * 阶段一：抖动。
+ * 用 element.animate() 给卡片本体排一组来回摆动的关键帧（幅度先小后大）。
+ * 返回值是 Promise，所以调用方可以直接 await —— 比 setTimeout 精确。
+ */
+function shakeCard(cardEl) {
+    cardEl.classList.add('card-doomed');      // 描边转红，提示"这篇要没了"
+    const anim = cardEl.animate(
+        [
+            { transform: 'translate(0, 0) rotate(0deg)' },
+            { transform: 'translate(-4px, 1px) rotate(-0.8deg)' },
+            { transform: 'translate(4px, -1px) rotate(0.9deg)' },
+            { transform: 'translate(-8px, 2px) rotate(-1.8deg)' },
+            { transform: 'translate(8px, -2px) rotate(2deg)' },
+            { transform: 'translate(-6px, 1px) rotate(-1.4deg)' },
+            { transform: 'translate(3px, 0) rotate(0.6deg)' },
+            { transform: 'translate(0, 0) rotate(0deg)' },
+        ],
+        { duration: 520, easing: 'ease-in-out' }
+    );
+    // anim.finished 是动画自带的 Promise；catch 是防页面切走导致动画被打断时报错
+    return anim.finished.catch(() => {});
+}
+
+/**
+ * 阶段二：粉碎成粒子坠落。
  * 原理（给想深究的同学）：
  *   1. getBoundingClientRect() 拿到卡片在**视口**里的位置和尺寸
  *   2. 建一个 fixed 全屏透明容器 .shatter-holder，按视口坐标摆放碎片
- *   3. 克隆 16 个和卡片同尺寸同外观的 div，用 clip-path 裁出 4x4 中的某一格
- *      （每格边界加随机抖动，看起来是不规则的碎块而不是方格）
- *   4. element.animate() 让每块碎片飞向随机方向 + 旋转 + 变透明
- *      这个 API 是浏览器原生的 Web Animations，性能好且无需任何库
- *   5. setTimeout 后整层移除，页面恢复干净
+ *   3. 克隆 25 个和卡片同尺寸的 div，用 clip-path 各裁出 5x5 里不规则的一格
+ *   4. 每块按自己所在格子的方向跑一条"抛物线"：
+ *        起爆仍在原位 → 向外上方抛起 → 越过起点开始下落 → 加速坠出屏幕并渐隐
+ *      （三段关键帧模拟重力：上升慢、下落快）
+ *   5. 每块延迟 0~140ms 错开起跑，看起来才像"接连碎掉"而不是整块平移
+ *   6. 动画结束后拆掉整层，DOM 恢复干净
  */
-function playShatter(cardEl) {
+function burstIntoParticles(cardEl) {
     const rect = cardEl.getBoundingClientRect();
-    cardEl.style.visibility = 'hidden';               // 本体瞬间消失，只留碎片
+    // 取卡片左边框的情绪色，让碎片保留这张卡片"是什么情绪"的颜色记忆
+    const accent = getComputedStyle(cardEl).borderLeftColor || '#7aa2ff';
+
+    cardEl.classList.remove('card-doomed');
+    cardEl.style.visibility = 'hidden';         // 本体消失，只留碎片
 
     const holder = document.createElement('div');
     holder.className = 'shatter-holder';
     document.body.appendChild(holder);
 
-    // 取卡片左边框的情绪色，让碎片保留这张卡片"是什么情绪"的颜色记忆
-    const accent = getComputedStyle(cardEl).borderLeftColor || '#7aa2ff';
-    const COLS = 4, ROWS = 4;
+    const COLS = 5, ROWS = 5;
     const frags = [];
 
     for (let r = 0; r < ROWS; r++) {
@@ -647,33 +684,47 @@ function playShatter(cardEl) {
             frag.style.height = rect.height + 'px';
             frag.style.borderLeftColor = accent;
 
-            // 用百分比裁出这一格；jitter 让边界歪歪扭扭，更像真碎片
+            // clip-path 裁出这一格；jitter 让边界歪歪扭扭，像真碎片而不是方格
             const x0 = (c * 100) / COLS, y0 = (r * 100) / ROWS;
             const x1 = ((c + 1) * 100) / COLS, y1 = ((r + 1) * 100) / ROWS;
-            const j = () => (Math.random() * 2 - 1) * 1.6;
+            const j = () => (Math.random() * 2 - 1) * 2.4;
             frag.style.clipPath = `polygon(${x0 + j()}% ${y0 + j()}%, ${x1 + j()}% ${y0 + j()}%, ${x1 + j()}% ${y1 + j()}%, ${x0 + j()}% ${y1 + j()}%)`;
 
             holder.appendChild(frag);
-            frags.push(frag);
+            frags.push({ el: frag, col: c, row: r });
         }
     }
 
-    frags.forEach((frag) => {
-        const dx = (Math.random() - 0.5) * 240;              // 左右飞散
-        const dy = (Math.random() - 0.2) * 200 + 60;         // 整体偏向下坠（重力感）
-        const rot = (Math.random() - 0.5) * 100;             // 随机翻转
-        const dur = 480 + Math.random() * 320;               // 0.48~0.8 秒
-        frag.animate(
+    frags.forEach(({ el, col, row }) => {
+        // 这一格相对卡片中心的方向：决定它往左还是往右、往上还是往下炸
+        const dirX = ((col + 0.5) / COLS - 0.5) * 2;      // -1(最左) ~ +1(最右)
+        const dirY = ((row + 0.5) / ROWS - 0.5) * 2;      // -1(最上) ~ +1(最下)
+
+        const spreadX = dirX * (80 + Math.random() * 150);          // 横向爆散距离
+        const liftY = -(30 + Math.random() * 70) + dirY * -20;      // 第一段：向上抛起（负=向上）
+        const fallY = rect.height * 0.75 + Math.random() * 130;     // 第二段：越过起点往下落
+        const dropY = 360 + Math.random() * 280;                    // 第三段：加速坠出屏幕
+        const rot = (Math.random() - 0.5) * 240;                    // 翻滚角度
+        const delay = Math.random() * 140;                           // 错开起跑
+        const dur = 780 + Math.random() * 260;                       // 0.78~1.04 秒
+
+        el.animate(
             [
-                { transform: 'translate(0, 0) rotate(0deg)', opacity: 1 },
-                { transform: `translate(${dx}px, ${dy}px) rotate(${rot}deg)`, opacity: 0 },
+                // 起爆：还几乎在原位
+                { transform: 'translate(0, 0) rotate(0deg) scale(1)', opacity: 1, offset: 0 },
+                // 上抛：向外上方飞起一小段
+                { transform: `translate(${spreadX * 0.45}px, ${liftY}px) rotate(${rot * 0.3}deg) scale(0.95)`, opacity: 1, offset: 0.26 },
+                // 回落：越过原位继续下坠
+                { transform: `translate(${spreadX * 0.8}px, ${fallY}px) rotate(${rot * 0.7}deg) scale(0.82)`, opacity: 0.92, offset: 0.6 },
+                // 坠毁：加速掉出屏幕并淡出
+                { transform: `translate(${spreadX}px, ${dropY}px) rotate(${rot}deg) scale(0.5)`, opacity: 0, offset: 1 },
             ],
-            { duration: dur, easing: 'cubic-bezier(.2, .65, .35, 1)', fill: 'forwards' }
+            { duration: dur, delay, easing: 'linear', fill: 'forwards' }
         );
     });
 
-    // 动画结束后拆掉整个动画层，DOM 恢复干净
-    setTimeout(() => holder.remove(), 900);
+    // 连最长的那块都落完之后，拆掉动画层并通知调用方继续
+    return new Promise((resolve) => setTimeout(() => { holder.remove(); resolve(); }, 1180));
 }
 
 async function loadDiaryDetail(diaryId) {
