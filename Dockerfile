@@ -44,7 +44,12 @@ ENV MUSIC_LIBRARY_FIRST=True
 ENV DATABASE_URL=sqlite:///./storage/diary_demo.db
 EXPOSE 8000
 
-# 云平台会注入 PORT；没注入就用 8000（本地 docker run 直接可用）
-# 先 seed 再启动：免费实例文件系统是易失的，每次冷启动都是空库，
+# ⚠️ 端口写死 8000（不用 ${PORT}）的原因：
+#   腾讯云云托管会在容器里注入 PORT 环境变量（常为 80），但控制台
+#   「监听端口」又是单独填的一项 —— 两边一旦不一致，健康检查就失败、
+#   访问直接 502。写死 8000 + 控制台监听端口填 8000，零歧义。
+#   换到 Render 这类强制用注入端口的平台时，再改回 --port ${PORT:-8000}。
+#
+# 先 seed 再启动：云托管容器文件系统是易失的，冷启动后库是空的，
 # 不灌数据评委第一眼只看到"暂无日记"。seed 是纯本地脚本，约 1 秒。
-CMD ["sh", "-c", "python scripts/seed_demo.py --build && uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "python scripts/seed_demo.py --build && uvicorn backend.main:app --host 0.0.0.0 --port 8000"]
