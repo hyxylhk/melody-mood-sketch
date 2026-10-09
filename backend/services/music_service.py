@@ -241,6 +241,11 @@ async def generate_music_task(
         # 文件位置改存 meta_json 里，仅作展示用途。
         if settings.MUSIC_LIBRARY_FIRST:
             lib_track = music_library.pick_library_track(emotion.primary)
+            if lib_track is None:
+                # 该情绪在曲库里没有专属曲目 → 从库里挑一首平静曲兜底。
+                # 演示场合宁可"情绪不那么精准"也不出现算法合成的音乐，
+                # 保证用户听到的永远是素材库里的真歌。
+                lib_track = music_library.pick_library_track("neutral")
             if lib_track is not None:
                 print(f"[INFO] track_id={track_id} 命中素材曲库：{lib_track['title']}")
                 crud_ops.mark_track_ready(

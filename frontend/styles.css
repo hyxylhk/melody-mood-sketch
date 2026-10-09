@@ -524,12 +524,11 @@ body {
     pointer-events: none;             /* 纯展示，别挡住点击 */
 }
 
-/* 「抖动 → 粉碎」删除动效：
+/* 「抖动 → 粒子化消散」删除动效：
    阶段一：JS 给卡片本体加 .card-doomed，描边转红并左右摆动；
-   阶段二：把卡片在屏幕上原本的位置克隆成 5x5=25 块碎片（.shatter-fragment），
-           每块用 clip-path 裁出自己那一格，再用 Web Animations API 跑一条
-           "向外爆开 → 抛物线上抛 → 被重力加速拉落"的路径并渐隐。
-   全程 GPU 合成，不引起页面重排，非常流畅。 */
+   阶段二：本体隐身，Canvas（.shatter-canvas）叠在卡片原位铺出约 2000 个
+           彩色颗粒，先原位高频抖动，再被风错峰吹向上方、湍流飘散渐隐。
+           Canvas 每帧只做 clearRect + fillRect，性能远好于上千个 DOM 节点。 */
 
 /* 抖动阶段的"临终警示"外观 */
 .card-doomed {
@@ -538,19 +537,9 @@ body {
                 0 0 24px rgba(255, 90, 90, 0.16);
 }
 
-.shatter-holder {
-    position: fixed;
-    inset: 0;                         /* 覆盖整个视口，方便按视口坐标摆放碎片 */
-    z-index: 999;
-    pointer-events: none;             /* 纯动画层，绝不拦截用户点击 */
-}
-.shatter-fragment {
-    position: absolute;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--panel-border);
-    border-left: 3px solid var(--accent);
-    border-radius: var(--radius-sm);
-    will-change: transform, opacity;  /* 提示浏览器把这层交给 GPU */
+.shatter-canvas {
+    /* Canvas 粒子化动画层：位置/尺寸由 JS 按卡片矩形内联指定 */
+    image-rendering: pixelated;   /* 像素颗粒感更锐利 */
 }
 
 /* ------------------------------ 页脚 & 提示 ------------------------------ */

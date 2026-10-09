@@ -579,12 +579,13 @@ async function togglePin(item) {
 }
 
 /* ---------------------------------------------------------------------------
-   删除 + 「抖动 → 粉碎成粒子坠落」动效
+   删除 + 「抖动 → 粒子化消散」动效
 
    两个阶段：
      ① 抖动（约 0.5 秒）：卡片本体左右高频摆动，描边转红，像"被抓住摇醒"
-     ② 粉碎（约 1.0 秒）：本体隐身，原位生成 5x5=25 块不规则碎片，
-        先向外上方爆开（抛物线上升段），再被"重力"加速拉落并渐隐消失
+     ② 粒子化（约 2 秒）：本体隐身，Canvas 在原位铺出约 2000 个彩色颗粒，
+        先整体高频抖动制造"不稳定感"，再被风错峰吹向上方、湍流飘散并渐隐
+        （灭霸打响指那种消散，参考粒子化动效实现）
 
    数据请求和动画并行：DELETE 请求在动画开跑的同一瞬间发出，互不等待。
 --------------------------------------------------------------------------- */
@@ -648,83 +649,102 @@ function shakeCard(cardEl) {
 }
 
 /**
- * 阶段二：粉碎成粒子坠落。
+ * 阶段二：灭霸式粒子化消散。
  * 原理（给想深究的同学）：
  *   1. getBoundingClientRect() 拿到卡片在**视口**里的位置和尺寸
- *   2. 建一个 fixed 全屏透明容器 .shatter-holder，按视口坐标摆放碎片
- *   3. 克隆 25 个和卡片同尺寸的 div，用 clip-path 各裁出 5x5 里不规则的一格
- *   4. 每块按自己所在格子的方向跑一条"抛物线"：
- *        起爆仍在原位 → 向外上方抛起 → 越过起点开始下落 → 加速坠出屏幕并渐隐
- *      （三段关键帧模拟重力：上升慢、下落快）
- *   5. 每块延迟 0~140ms 错开起跑，看起来才像"接连碎掉"而不是整块平移
- *   6. 动画结束后拆掉整层，DOM 恢复干净
+ *   2. 建一个和卡片同大小的 <canvas>，fixed 定位叠在卡片原位
+ *   3. 按 5px 网格采样整个卡片矩形，铺出约 2000 个彩色小粒子
+ *      （情绪色打底 + 白灰质感 + 少量彩色点缀，像素颗粒感）
+ *   4. 前一小段：全体粒子在原位高频抖动，像信号噪点一样"不稳定"
+ *   5. 之后每个粒子随机错开 0~0.5 秒被"风"吹走：
+ *        向上飘（灭霸消散的方向）+ 正弦湍流摆动 + 线性渐隐
+ *   6. 全部飘完后移除 canvas，DOM 恢复干净
  */
 function burstIntoParticles(cardEl) {
     const rect = cardEl.getBoundingClientRect();
-    // 取卡片左边框的情绪色，让碎片保留这张卡片"是什么情绪"的颜色记忆
+    // 取卡片左边框的情绪色，让粒子保留这张卡片"是什么情绪"的颜色记忆
     const accent = getComputedStyle(cardEl).borderLeftColor || '#7aa2ff';
 
     cardEl.classList.remove('card-doomed');
-    cardEl.style.visibility = 'hidden';         // 本体消失，只留碎片
+    cardEl.style.visibility = 'hidden';         // 本体消失，只留粒子
 
-    const holder = document.createElement('div');
-    holder.className = 'shatter-holder';
-    document.body.appendChild(holder);
+    const canvas = document.createElement('canvas');
+    canvas.className = 'shatter-canvas';
+    const W = Math.ceil(rect.width), H = Math.ceil(rect.height);
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.cssText = 'position:fixed;z-index:999;pointer-events:none;'
+        + 'left:' + rect.left + 'px;top:' + rect.top + 'px;'
+        + 'width:' + W + 'px;height:' + H + 'px;';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
 
-    const COLS = 5, ROWS = 5;
-    const frags = [];
+    // 粒子调色板：情绪色打底 + 白/灰做卡片质感 + 少量彩色点缀（像素风）
+    const palette = [accent, accent, '#e8ecf5', '#9aa5bd', '#ffd166', '#ef476f', '#4ecdc4', '#a78bfa'];
 
-    for (let r = 0; r < ROWS; r++) {
-        for (let c = 0; c < COLS; c++) {
-            const frag = document.createElement('div');
-            frag.className = 'shatter-fragment';
-            frag.style.left = rect.left + 'px';
-            frag.style.top = rect.top + 'px';
-            frag.style.width = rect.width + 'px';
-            frag.style.height = rect.height + 'px';
-            frag.style.borderLeftColor = accent;
-
-            // clip-path 裁出这一格；jitter 让边界歪歪扭扭，像真碎片而不是方格
-            const x0 = (c * 100) / COLS, y0 = (r * 100) / ROWS;
-            const x1 = ((c + 1) * 100) / COLS, y1 = ((r + 1) * 100) / ROWS;
-            const j = () => (Math.random() * 2 - 1) * 2.4;
-            frag.style.clipPath = `polygon(${x0 + j()}% ${y0 + j()}%, ${x1 + j()}% ${y0 + j()}%, ${x1 + j()}% ${y1 + j()}%, ${x0 + j()}% ${y1 + j()}%)`;
-
-            holder.appendChild(frag);
-            frags.push({ el: frag, col: c, row: r });
+    // ---- 网格采样铺粒子 ----
+    const GAP = 5;                    // 采样间距：越小粒子越密、越像原内容的形状
+    const parts = [];
+    for (let y = GAP / 2; y < H; y += GAP) {
+        for (let x = GAP / 2; x < W; x += GAP) {
+            parts.push({
+                ox: x + (Math.random() * 2 - 1) * 1.6,   // 初始位置（带抖动）
+                oy: y + (Math.random() * 2 - 1) * 1.6,
+                size: 1.4 + Math.random() * 1.8,          // 1.4~3.2px 的彩色颗粒
+                color: palette[(Math.random() * palette.length) | 0],
+                delay: Math.random() * 0.5,               // 被风吹走的错峰时间
+                vx: (Math.random() * 2 - 1) * 80,         // 水平风向（左右都可能）
+                vy: -(60 + Math.random() * 130),          // 一律向上飘（灭霸消散方向）
+                wobF: 1.5 + Math.random() * 2.5,          // 湍流频率
+                wobA: 12 + Math.random() * 30,            // 湍流幅度
+                phase: Math.random() * 6.283,
+                life: 0.9 + Math.random() * 0.8,          // 起飞后存活时长（渐隐用）
+            });
         }
     }
 
-    frags.forEach(({ el, col, row }) => {
-        // 这一格相对卡片中心的方向：决定它往左还是往右、往上还是往下炸
-        const dirX = ((col + 0.5) / COLS - 0.5) * 2;      // -1(最左) ~ +1(最右)
-        const dirY = ((row + 0.5) / ROWS - 0.5) * 2;      // -1(最上) ~ +1(最下)
+    const T0 = performance.now();
+    const TOTAL_MS = 2600;                    // 整段动画时长（含最长尾的粒子）
 
-        const spreadX = dirX * (80 + Math.random() * 150);          // 横向爆散距离
-        const liftY = -(30 + Math.random() * 70) + dirY * -20;      // 第一段：向上抛起（负=向上）
-        const fallY = rect.height * 0.75 + Math.random() * 130;     // 第二段：越过起点往下落
-        const dropY = 360 + Math.random() * 280;                    // 第三段：加速坠出屏幕
-        const rot = (Math.random() - 0.5) * 240;                    // 翻滚角度
-        const delay = Math.random() * 140;                           // 错开起跑
-        const dur = 780 + Math.random() * 260;                       // 0.78~1.04 秒
+    return new Promise((resolve) => {
+        function frame(now) {
+            const t = (now - T0) / 1000;      // 秒
+            ctx.clearRect(0, 0, W, H);
+            let alive = 0;
 
-        el.animate(
-            [
-                // 起爆：还几乎在原位
-                { transform: 'translate(0, 0) rotate(0deg) scale(1)', opacity: 1, offset: 0 },
-                // 上抛：向外上方飞起一小段
-                { transform: `translate(${spreadX * 0.45}px, ${liftY}px) rotate(${rot * 0.3}deg) scale(0.95)`, opacity: 1, offset: 0.26 },
-                // 回落：越过原位继续下坠
-                { transform: `translate(${spreadX * 0.8}px, ${fallY}px) rotate(${rot * 0.7}deg) scale(0.82)`, opacity: 0.92, offset: 0.6 },
-                // 坠毁：加速掉出屏幕并淡出
-                { transform: `translate(${spreadX}px, ${dropY}px) rotate(${rot}deg) scale(0.5)`, opacity: 0, offset: 1 },
-            ],
-            { duration: dur, delay, easing: 'linear', fill: 'forwards' }
-        );
+            for (const p of parts) {
+                const lt = t - p.delay;       // 这个粒子自己的时间线
+
+                let px, py, alpha;
+                if (lt < 0) {
+                    // 还没被吹走：在原位高频抖动（像信号不稳）
+                    px = p.ox + Math.sin(t * 45 + p.phase) * 1.3;
+                    py = p.oy + Math.cos(t * 38 + p.phase) * 1.3;
+                    alpha = 1;
+                } else if (lt < p.life) {
+                    // 被风吹走：匀速上飘 + 正弦湍流 + 渐隐
+                    px = p.ox + p.vx * lt + Math.sin(lt * p.wobF * 2 + p.phase) * p.wobA * lt;
+                    py = p.oy + p.vy * lt + Math.cos(lt * p.wobF + p.phase) * p.wobA * 0.4 * lt;
+                    alpha = 1 - lt / p.life;
+                } else {
+                    continue;                 // 已经飘没了
+                }
+
+                alive++;
+                ctx.globalAlpha = alpha;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(px, py, p.size, p.size);
+            }
+
+            if (alive > 0 && t * 1000 < TOTAL_MS + 400) {
+                requestAnimationFrame(frame);
+            } else {
+                canvas.remove();
+                resolve();
+            }
+        }
+        requestAnimationFrame(frame);
     });
-
-    // 连最长的那块都落完之后，拆掉动画层并通知调用方继续
-    return new Promise((resolve) => setTimeout(() => { holder.remove(); resolve(); }, 1180));
 }
 
 async function loadDiaryDetail(diaryId) {
