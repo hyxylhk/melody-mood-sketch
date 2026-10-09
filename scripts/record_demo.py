@@ -45,6 +45,7 @@ scripts/record_demo.py —— 一键生成参赛演示视频（竖屏 1080×1920
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import time
@@ -111,8 +112,18 @@ CAPTION_HIDE_JS = """
 """
 
 
+# 字幕时间轴：记录每条字幕出现的时刻，之后给视频配语音旁白时要用
+CAPTION_TIMELINE: list = []
+RECORD_T0 = [0.0]
+
+
 def caption(page, text: str, hold_ms: int = 2600) -> None:
     """显示一条字幕并停留。hold_ms 里视频就是"看字幕 + 看画面"的时间。"""
+    CAPTION_TIMELINE.append({
+        "text": text,
+        "at_ms": int((time.time() - RECORD_T0[0]) * 1000),
+        "hold_ms": hold_ms,
+    })
     page.evaluate(CAPTION_JS, text)
     page.wait_for_timeout(hold_ms)
 
@@ -178,6 +189,8 @@ def main() -> int:
 
     print(f"录制目标：{BASE_URL}")
     before_id = max_diary_id()
+    # 字幕时间轴的 0 点会在 page 建好后重置（见下方 new_page 之后），
+    # 这样时间轴 == 视频时间轴，后面配音才能对得上。
 
     with sync_playwright() as p:
         # channel="msedge"：用系统自带的 Edge，不用下载 195MB 的浏览器内核
@@ -193,6 +206,8 @@ def main() -> int:
             record_video_size=VIDEO_SIZE,
         )
         page = context.new_page()
+        # 录像从这里开始写盘，字幕时间轴必须以这一刻为 0 点
+        RECORD_T0[0] = time.time()
 
         # ---------- 第 0 幕：产品定位（why） ----------
         page.goto(BASE_URL, wait_until="networkidle", timeout=60_000)
@@ -276,6 +291,13 @@ def main() -> int:
         video_path = page.video.path() if page.video else None
         context.close()      # 关闭上下文才会把视频写盘
         browser.close()
+
+    # 把字幕时间轴存下来，add_narration.py 会按它给视频配音
+    tl_path = OUT_DIR / "caption_timeline.json"
+    tl_path.write_text(
+        json.dumps(CAPTION_TIMELINE, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"字幕时间轴已保存：{tl_path.name}（{len(CAPTION_TIMELINE)} 条）")
 
     if not video_path or not Path(video_path).exists():
         print("✘ 没有拿到视频文件")
