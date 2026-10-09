@@ -58,3 +58,6 @@ docs/page@*.webm
 
 # 云平台部署包（临时产物，不入库）
 cloudbase_deploy.zip
+
+# HF Space 部署目录（独立 git 仓库）
+hf_space/
